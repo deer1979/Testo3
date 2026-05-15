@@ -1,35 +1,36 @@
 [versions]
 # AGP / Kotlin / Build tools
-agp = "9.0.1"
-kotlin = "2.1.20"
-ksp = "2.1.20-1.0.32"
+agp = "9.1.1"
+kotlin = "2.3.21"
+# KSP 2.3.0+ usa versionado independiente (ya no "{kotlin}-{ksp}")
+ksp = "2.3.5"
 
 # AndroidX core
-androidx-core = "1.16.0"
-androidx-activity = "1.10.1"
-androidx-lifecycle = "2.9.0"
-androidx-navigation = "2.9.0"
-androidx-room = "2.7.0"
-androidx-camera = "1.4.2"
-androidx-security = "1.1.0-alpha09"
+androidx-core = "1.18.0"
+androidx-activity = "1.13.0"
+androidx-lifecycle = "2.10.0"
+androidx-navigation = "2.9.8"
+androidx-room = "2.8.4"
+androidx-camera = "1.6.0"
+androidx-security = "1.1.0"
 
 # Compose
-compose-bom = "2025.05.00"
+compose-bom = "2026.04.01"
 
 # Hilt
-hilt = "2.54"
+hilt = "2.57.2"
 androidx-hilt = "1.2.0"
 
 # Firebase
-google-services = "4.4.2"
-firebase-bom = "33.14.0"
-firebase-crashlytics-plugin = "3.0.3"
+google-services = "4.4.4"
+firebase-bom = "34.13.0"
+firebase-crashlytics-plugin = "3.0.7"
 
 # ML Kit
 mlkit-text = "19.0.1"
 
 # Coroutines
-coroutines = "1.10.1"
+coroutines = "1.11.0"
 
 # Logging
 timber = "5.0.1"
@@ -106,6 +107,7 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 google-gms-google-services = { id = "com.google.gms.google-services", version.ref = "google-services" }
 google-firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebase-crashlytics-plugin" }
