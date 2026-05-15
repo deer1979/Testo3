@@ -1,0 +1,130 @@
+rules_version = '2';
+
+// ===============================================================================
+// REGLAS FIRESTORE — BoxContainer
+// ===============================================================================
+// IMPORTANTE: NO deployar estas reglas hasta tener App Check activo en la consola y
+// los usuarios reales creados. Mientras estás en desarrollo, usá las reglas permisivas
+// que vienen por default (modo "test").
+//
+// Cuando salgas a producción:
+//   1. Activá App Check en Firebase Console > App Check > tu app.
+//   2. Cargá la huella SHA-256 de tu APK firmado de release.
+//   3. Reemplazá las reglas de tu proyecto con este archivo en Firebase Console >
+//      Firestore Database > Rules.
+// ===============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -----------------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------------
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAppCheckValid() {
+      // App Check enforcement — solo apps verificadas pueden escribir
+      return request.app != null;
+    }
+
+    function getUserRole(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data.role;
+    }
+
+    function getUserActive(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data.isActive == true;
+    }
+
+    function isAdmin() {
+      let role = getUserRole(request.auth.uid);
+      return isAuthenticated() && getUserActive(request.auth.uid) &&
+             (role == 'ADMIN' || role == 'SUPER_ADMIN');
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserActive(request.auth.uid) &&
+             getUserRole(request.auth.uid) == 'SUPER_ADMIN';
+    }
+
+    function isActiveUser() {
+      return isAuthenticated() && getUserActive(request.auth.uid);
+    }
+
+    // -----------------------------------------------------------------------------
+    // /_meta/bootstrap — marca atómica del bootstrap inicial
+    // -----------------------------------------------------------------------------
+    // Permite a cualquier usuario autenticado intentar crear el doc, pero solo
+    // gana la transacción del primer registro. Una vez creado, nadie puede modificarlo.
+    match /_meta/bootstrap {
+      allow read: if isAuthenticated() && isAppCheckValid();
+      allow create: if isAuthenticated() && isAppCheckValid() &&
+                       !exists(/databases/$(database)/documents/_meta/bootstrap);
+      allow update, delete: if false;  // Inmutable una vez creado
+    }
+
+    // -----------------------------------------------------------------------------
+    // /users/{uid} — perfiles de usuario
+    // -----------------------------------------------------------------------------
+    match /users/{uid} {
+      // Lectura: el propio usuario o un admin
+      allow read: if isAuthenticated() && isAppCheckValid() &&
+                     (request.auth.uid == uid || isAdmin());
+
+      // Listar usuarios: solo admins (para pantalla de gestión)
+      allow list: if isAdmin() && isAppCheckValid();
+
+      // Crear: solo en dos casos
+      // (a) Bootstrap: primer usuario, no existe /_meta/bootstrap aún (cliente lo crea en la misma tx)
+      // (b) Usuarios subsiguientes: crean su perfil propio con role=OPERATOR e isActive=false
+      allow create: if isAuthenticated() && isAppCheckValid() &&
+                       request.auth.uid == uid && (
+                          // Bootstrap permitido — el cliente debe crear /_meta/bootstrap en la misma tx
+                          !exists(/databases/$(database)/documents/_meta/bootstrap) ||
+                          // Registro normal: rol obligatoriamente OPERATOR e inactivo
+                          (request.resource.data.role == 'OPERATOR' &&
+                           request.resource.data.isActive == false)
+                       );
+
+      // Update: SUPER_ADMIN puede modificar cualquier user; usuarios normales no pueden
+      // cambiar role ni isActive de su propio doc.
+      allow update: if isAuthenticated() && isAppCheckValid() && (
+                       isSuperAdmin() ||
+                       (request.auth.uid == uid &&
+                        request.resource.data.role == resource.data.role &&
+                        request.resource.data.isActive == resource.data.isActive)
+                    );
+
+      // Delete: solo SUPER_ADMIN
+      allow delete: if isSuperAdmin() && isAppCheckValid();
+    }
+
+    // -----------------------------------------------------------------------------
+    // /containers/{id} — unidades reefer
+    // -----------------------------------------------------------------------------
+    match /containers/{id} {
+      // Lectura: cualquier usuario activo
+      allow read, list: if isActiveUser() && isAppCheckValid();
+
+      // Crear y editar: cualquier usuario activo
+      allow create, update: if isActiveUser() && isAppCheckValid();
+
+      // Eliminar: solo admins
+      allow delete: if isAdmin() && isAppCheckValid();
+
+      // /containers/{id}/history/{eventId} — auditoría
+      match /history/{eventId} {
+        allow read, list: if isActiveUser() && isAppCheckValid();
+        allow create: if isActiveUser() && isAppCheckValid();
+        // El historial es append-only: no se puede editar ni borrar
+        allow update, delete: if false;
+      }
+    }
+
+    // Cualquier otra cosa queda bloqueada por default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
